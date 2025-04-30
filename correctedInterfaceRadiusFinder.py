@@ -479,3 +479,5 @@ def analyze_meniscus(image_path, enable_plot=True):
 if __name__ == "__main__":
     image_path = "test_angle_3.png"
     results = analyze_meniscus(image_path, enable_plot=True)
+
+lalala
