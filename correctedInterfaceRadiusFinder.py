@@ -179,13 +179,15 @@ def find_vertical_boundaries(differences, start_idx, end_idx):
     # use these two thresholds to select the first and last local maximum in the
     # subregion_differences (with the interface)
 
-    margin = 2.5
+    margin = 1.8
     threshold1 = np.mean(differences[:start_idx]) * margin
     threshold2 = np.mean(differences[end_idx:]) * margin
-
+    #try:
     first_local_max_index = local_maxima_index[local_maxima > threshold1][0]
     last_local_max_index = local_maxima_index[local_maxima > threshold2][-1]
     first_last_local_max_index = [first_local_max_index, last_local_max_index]
+    #except IndexError:
+        #first_last_local_max_index = [0, -1]
     debug_plot(
         local_maxima,
         local_maxima_index,
@@ -221,7 +223,7 @@ def analyze_vertical_differences(image_path, top_index, bottom_index, enable_plo
     )
 
     # Apply smoothing
-    window_size = int(0.01 * width)  # 1% of image width
+    window_size = int(0.03 * width)  # 1% of image width
     smoothed_differences = smooth_data(differences, window_size)
 
     # Plot smoothed differences if enabled
@@ -242,11 +244,11 @@ def analyze_vertical_differences(image_path, top_index, bottom_index, enable_plo
     # Make some extra room
     start_idx = int(min(max_idx, min_idx) - interfaceWidth / 2)
     end_idx = int(max(max_idx, min_idx) + interfaceWidth / 2)
+    debug_plot(derivative, range(len(derivative)), verticalLines=[start_idx, end_idx])
 
     # Find vertical boundaries
     vertical_boundaries = find_vertical_boundaries(differences, start_idx, end_idx)
 
-    debug_plot(derivative, range(len(derivative)), verticalLines=[start_idx, end_idx])
 
     return int(CropAmount * width) + np.array(vertical_boundaries)
 
@@ -477,5 +479,5 @@ def analyze_meniscus(image_path, enable_plot=True):
 
 # Execute analysis if run directly
 if __name__ == "__main__":
-    image_path = "test_angle_3.png"
+    image_path = "Figures/3.png"
     results = analyze_meniscus(image_path, enable_plot=True)
