@@ -877,6 +877,32 @@ def plot_triangle_diagram(photo, points, circle_center, enable_plot=True):
 
 
     """
+    Fit a circle to a set of points using least squares.
+
+    Args:
+        points (array-like): List or array of points [[x1, y1], [x2, y2], [x3, y3], ...]
+
+    Returns:
+        (cx, cy, r): Circle center (cx, cy) and radius r
+    """
+def fit_circle(points):
+    points = np.asarray(points)
+    x = points[:, 0]
+    y = points[:, 1]
+
+    # Build matrix A and vector b for solving least squares
+    A = np.c_[2 * x, 2 * y, np.ones(points.shape[0])]
+    b = x**2 + y**2
+
+    # Solve normal equations
+    params, _, _, _ = np.linalg.lstsq(A, b, rcond=None)
+    cx, cy = params[0], params[1]
+    r = np.sqrt(params[2] + cx**2 + cy**2)
+
+    return cx, cy, r
+
+
+    """
     Perform complete meniscus analysis on an image of a fluid channel.
     
     This function orchestrates the entire analysis pipeline for meniscus characterization:
@@ -925,7 +951,7 @@ def analyze_meniscus(image_path, enable_plot=True):
     p3 = [right_index, middle_of_channel]  # Right middle point on meniscus
     
     # Step 4: Compute the parameters of the circle that best fits the meniscus
-    cx, cy, r = circle_from_3pts(p1, p2, p3)  # Center x, center y, radius
+    cx, cy, r = fit_circle([p1, p2, p3])  # Center x, center y, radius
     
     # Step 5: Calculate the contact angle between meniscus and wall
     contact_angle = compute_contact_angle(p1, cx, cy)  # Angle in degrees
@@ -966,5 +992,5 @@ def analyze_meniscus(image_path, enable_plot=True):
 
 # Execute analysis if run directly
 if __name__ == "__main__":
-    image_path = "Figures/Wiktor_angle.png"
+    image_path = "Figures/test_angle_1.png"
     results = analyze_meniscus(image_path, enable_plot=True)
