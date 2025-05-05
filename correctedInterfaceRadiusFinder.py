@@ -518,30 +518,54 @@ def find_vertical_boundaries(differences, start_idx, end_idx):
     return [start_idx + i for i in first_last_local_max_index]
 
 
-
-
-
-
-
-
-
-
-#Analyze vertical differences to find meniscus boundaries
+"""
+    Analyzes vertical differences in an image to detect meniscus boundaries in a channel.
+    
+    This function performs a sophisticated analysis of column-wise pixel differences
+    to identify the left and right boundaries of a meniscus or interface within a fluid channel.
+    The process involves multiple steps:
+    
+    1. Loading and cropping the image to focus on the channel region identified by horizontal analysis
+    2. Computing column-wise differences to highlight vertical transitions
+    3. Applying smoothing to reduce noise and enhance significant features
+    4. Calculating the gradient (derivative) to identify regions of rapid change
+    5. Using the extrema of the derivative to locate the approximate interface region
+    6. Performing detailed boundary detection within this region of interest
+    
+    This analysis is particularly useful for scientific applications such as microfluidics,
+    surface tension studies, or any application requiring precise detection of fluid interfaces.
+    
+    Args:
+        image_path (str): Path to the image file to analyze
+        top_index (int): Row index of the top boundary of the channel
+        bottom_index (int): Row index of the bottom boundary of the channel
+        enable_plot (bool, optional): Whether to display debug plots. Defaults to True.
+    
+    Returns:
+        numpy.ndarray: Array containing the column indices of the left and right 
+                      meniscus boundaries in the original image coordinate system
+    """
+# Analyse vertical differences in an image to detect meniscus boundaries in a channel
 def analyze_vertical_differences(image_path, top_index, bottom_index, enable_plot=True):
     # Load image and compute column-wise differences
     image, has_alpha, height, width = load_image(image_path)
-    # Crop image to only include channel
+    
+    # Crop image to only include channel and trim horizontal edges
+    # A small percentage (4%) is trimmed from each side to remove potential edge artifacts
     CropAmount = 0.04
     image = image[
         top_index:bottom_index, int(CropAmount * width) : int((1 - CropAmount) * width)
     ]
     newWidth = int((1 - 2 * CropAmount) * width)
+    
+    # Display the cropped channel region
     plt.imshow(image)
     plt.show()
-
+    
+    # Calculate pixel differences between adjacent columns
     differences = compute_mean_differences(image, "cols", has_alpha)
-
-    # Plot raw column differences if enabled
+    
+    # Plot raw column differences if debugging is enabled
     debug_plot(
         differences,
         title="Raw Column Differences",
@@ -549,12 +573,13 @@ def analyze_vertical_differences(image_path, top_index, bottom_index, enable_plo
         ylabel="Mean Gray Diff",
         enable_plot=enable_plot,
     )
-
-    # Apply smoothing
-    window_size = int(0.03 * width)  # 1% of image width
+    
+    # Apply smoothing to reduce noise while preserving significant transitions
+    # Window size is proportional to image width for adaptability across different resolutions
+    window_size = int(0.03 * width)  # 3% of image width
     smoothed_differences = smooth_data(differences, window_size)
-
-    # Plot smoothed differences if enabled
+    
+    # Plot smoothed differences for visualization
     debug_plot(
         smoothed_differences,
         title="Smoothed Column Differences",
@@ -562,43 +587,65 @@ def analyze_vertical_differences(image_path, top_index, bottom_index, enable_plo
         ylabel="Mean Gray Diff",
         enable_plot=enable_plot,
     )
-
-    # Calculate derivative and find extrema
+    
+    # Calculate derivative to identify regions of rapid change
+    # Positive peaks indicate transitions from dark to light
+    # Negative peaks indicate transitions from light to dark
     derivative = np.gradient(smoothed_differences)
-    max_idx = np.argmax(derivative)
-    min_idx = np.argmin(derivative)
-    extraBuffer = 1.5
+    max_idx = np.argmax(derivative)  # Likely one side of the interface
+    min_idx = np.argmin(derivative)  # Likely the other side of the interface
+    
+    # Determine region of interest around the interface
+    # Using an extra buffer factor to ensure the entire interface is captured
+    extraBuffer = 1.5  # Buffer multiplier for interface width
     interfaceWidth = abs(max_idx - min_idx) * extraBuffer
-    # Make some extra room
+    
+    # Calculate start and end indices for detailed boundary analysis
+    # Centered around the detected interface region
     start_idx = int(min(max_idx, min_idx) - interfaceWidth / 2)
     end_idx = int(max(max_idx, min_idx) + interfaceWidth / 2)
+    
+    # Visualize the derivative and selected region of interest
     debug_plot(derivative, range(len(derivative)), verticalLines=[start_idx, end_idx])
-
-    # Find vertical boundaries
+    
+    # Perform detailed boundary detection within the region of interest
     vertical_boundaries = find_vertical_boundaries(differences, start_idx, end_idx)
-
-
+    
+    # Convert boundary positions back to original image coordinates
+    # by accounting for the initial horizontal crop
     return int(CropAmount * width) + np.array(vertical_boundaries)
 
 
-# Geometry Calculations
-def circle_from_3pts(a, b, c):
-    """Compute circle parameters (center, radius) from three points."""
-    (x1, y1), (x2, y2), (x3, y3) = a, b, c
-    A = np.array([[x2 - x1, y2 - y1], [x3 - x1, y3 - y1]])
-    B = np.array(
-        [
-            ((x2**2 - x1**2) + (y2**2 - y1**2)) / 2,
-            ((x3**2 - x1**2) + (y3**2 - y1**2)) / 2,
-        ]
-    )
-    cx, cy = np.linalg.solve(A, B)
-    r = np.hypot(x1 - cx, y1 - cy)
-    return cx, cy, r
-
-
+"""
+    Compute the contact angle between a meniscus and a wall using circle geometry.
+    
+    This function calculates the angle between the tangent line to a circle at a 
+    given point (the contact point) and the vertical direction (representing the wall).
+    The calculation involves:
+    
+    1. Finding the radius vector from circle center to contact point
+    2. Computing the tangent vector by rotating the radius vector by 90 degrees
+    3. Calculating the angle between this tangent and the vertical direction
+    
+    This is particularly important in fluid dynamics, surface science, and microfluidics
+    where the contact angle characterizes wetting behavior and surface properties.
+    
+    Args:
+        p1 (array-like): Coordinates [x, y] of the contact point where the meniscus 
+                        meets the wall
+        cx (float): X-coordinate of the circle center representing the meniscus curvature
+        cy (float): Y-coordinate of the circle center representing the meniscus curvature
+    
+    Returns:
+        float: Contact angle in degrees, representing the angle between the tangent
+              to the meniscus at the contact point and the vertical wall
+    
+    Note:
+        The function includes numerical safeguards to prevent floating-point errors
+        when the angle approaches 0° or 180°.
+    """
+# Compute contact angle between meniscus and wall
 def compute_contact_angle(p1, cx, cy):
-    """Compute contact angle between meniscus and wall."""
     # Radius vector from circle center to the contact point p1
     rad_vec = np.array([p1[0] - cx, p1[1] - cy])
 
@@ -616,6 +663,35 @@ def compute_contact_angle(p1, cx, cy):
     return np.degrees(np.arccos(cos_theta))
 
 
+"""
+    Generate a series of points along a circular arc between two specified points.
+    
+    This function creates a discretized representation of a circular arc by:
+    
+    1. Computing the angular positions of the start and end points relative to the circle center
+    2. Generating a sequence of angles between these two positions
+    3. Converting these angles to Cartesian coordinates along the circle's circumference
+    
+    The resulting points can be used to draw or analyze the meniscus shape between
+    two contact points. The function ensures the shortest arc path is taken.
+    
+    Args:
+        cx (float): X-coordinate of the circle center
+        cy (float): Y-coordinate of the circle center
+        r (float): Radius of the circle
+        p1 (array-like): Coordinates [x, y] of the first point on the arc
+        p2 (array-like): Coordinates [x, y] of the second point on the arc
+    
+    Returns:
+        tuple: (xs, ys) where:
+               - xs: Array of x-coordinates of points along the arc
+               - ys: Array of y-coordinates of points along the arc
+               
+    Note:
+        The function generates 200 points along the arc for smooth visualization
+        or precise analysis.
+    """
+# Generate a series of points along a circular arc between two specified points
 def generate_arc_points(cx, cy, r, p1, p2):
     """Generate points along arc from p1 to p2."""
     theta1 = np.arctan2(p1[1] - cy, p1[0] - cx)
@@ -632,6 +708,26 @@ def generate_arc_points(cx, cy, r, p1, p2):
     return xs, ys
 
 
+"""
+    Create a comprehensive visualization of the meniscus analysis with annotations.
+    
+    This function generates a scientific visualization showing the detected meniscus
+    profile, channel boundaries, contact angles, and calculated radius of curvature.
+    All key measurements are displayed as annotations directly on the image.
+    
+    Args:
+        photo (numpy.ndarray): The original image array
+        points (list): Three points [p1, p2, p3] defining the meniscus curve
+        circle_params (tuple): (cx, cy, r) - center x, center y, and radius of fitted circle
+        boundaries (tuple): (top_index, bottom_index) - horizontal channel boundaries
+        vertical_boundaries (tuple): (vertical_indices, left_index, right_index) - 
+                                    vertical boundaries of the channel and interface
+        angle_data (tuple): (contact_angle, beta) - measured contact angles
+        enable_plot (bool, optional): Whether to display the visualization. Defaults to True.
+    
+    Returns:
+        None: This function displays a plot but doesn't return a value
+    """
 # Visualization Functions
 def plot_meniscus_with_annotations(
     photo,
@@ -642,28 +738,29 @@ def plot_meniscus_with_annotations(
     angle_data,
     enable_plot=True,
 ):
-    """Plot photo with meniscus annotations including contact angle and radius."""
+    # Skip visualization if plotting is disabled
     if not enable_plot:
         return
-
-    p1, p2, p3 = points
-    cx, cy, r = circle_params
-    top_index, bottom_index = boundaries
-    vertical_indices, left_index, right_index = vertical_boundaries
-    contact_angle, beta = angle_data
-
-    # Generate arc points
+        
+    # Unpack parameters for easier access
+    p1, p2, p3 = points  # Contact points and midpoint
+    cx, cy, r = circle_params  # Circle center coordinates and radius
+    top_index, bottom_index = boundaries  # Horizontal channel boundaries
+    vertical_indices, left_index, right_index = vertical_boundaries  # Vertical boundaries
+    contact_angle, beta = angle_data  # Contact angles at each interface
+    
+    # Generate smooth arc representing the meniscus curve between contact points
     xs, ys = generate_arc_points(cx, cy, r, p1, p2)
-
-    # Draw everything
+    
+    # Create visualization figure
     plt.figure(figsize=(12, 6))
-    plt.imshow(photo)
-
-    # Green contact lines
+    plt.imshow(photo)  # Display original image as background
+    
+    # Draw vertical green lines at the meniscus contact points with channel walls
     for idx in vertical_indices:
         plt.axvline(x=idx + 1, color="green", linestyle="-", linewidth=2)
-
-    # Red channel-wall lines
+    
+    # Draw horizontal red lines representing the channel walls
     plt.hlines(
         [top_index, bottom_index],
         xmin=0,
@@ -671,23 +768,25 @@ def plot_meniscus_with_annotations(
         colors="red",
         linewidth=2,
     )
-
-    # Blue meniscus arc
+    
+    # Draw blue curve representing the fitted meniscus profile
     plt.plot(xs, ys, "-", color="blue", linewidth=3)
-
-    # Convert radius to micrometers (assuming 100 μm channel height)
+    
+    # Convert pixel radius to physical units (micrometers)
+    # Assumes 100 μm standard channel height for scaling
     r_microns = r * (100 / abs(bottom_index - top_index))
-
-    # Add annotations
+    
+    # Add radius annotation in the upper left corner
     plt.text(
         photo.shape[1] * 0.05,
         photo.shape[0] * 0.05,
         r"$\mathrm{{Radius:\ {}}}\,\mu\mathrm{{m}}$".format(f"{r_microns:.1f}"),
         color="blue",
         fontsize=12,
-        bbox=dict(facecolor="white", alpha=0.7),
+        bbox=dict(facecolor="white", alpha=0.7),  # White background for readability
     )
-
+    
+    # Add left contact angle annotation
     plt.text(
         p1[0] + 10,
         bottom_index - 20,
@@ -696,7 +795,8 @@ def plot_meniscus_with_annotations(
         fontsize=12,
         bbox=dict(facecolor="white", alpha=0.7),
     )
-
+    
+    # Add right contact angle annotation
     plt.text(
         p2[0] + 10,
         bottom_index + 20,
@@ -705,83 +805,140 @@ def plot_meniscus_with_annotations(
         fontsize=12,
         bbox=dict(facecolor="white", alpha=0.7),
     )
-
-    # Draw radius
+    
+    # Draw a dashed line showing one radius of the circle
     plt.plot([cx, p1[0]], [cy, p1[1]], linestyle="--", color="blue", linewidth=2)
-
+    
+    # Remove axes for cleaner presentation
     plt.axis("off")
     plt.tight_layout()
-    plt.show()
+    plt.show()  # Display the final annotated visualization
 
 
+"""
+    Plot a triangle diagram showing the key geometric points in the meniscus analysis.
+    
+    This function creates a visualization of the geometric construction used in the 
+    meniscus analysis, showing the triangle formed by the contact points and circle center.
+    The triangle diagram helps illustrate the mathematical approach used to calculate
+    the circle parameters and contact angles.
+    
+    Args:
+        photo (numpy.ndarray): The original image array to use as background
+        points (list): Three points [p1, p2, p3] defining the meniscus curve
+        circle_center (list): [cx, cy] coordinates of the circle center
+        enable_plot (bool, optional): Whether to display the visualization. Defaults to True.
+    
+    Returns:
+        None: This function displays a plot but doesn't return a value
+    """
+#Plot a triangle diagram showing the key geometric points in the meniscus
 def plot_triangle_diagram(photo, points, circle_center, enable_plot=True):
     """Plot triangle diagram showing key geometric points."""
+    # Skip visualization if plotting is disabled
     if not enable_plot:
         return
-
-    p1, p2, p3 = points
-    cx, cy = circle_center
-
+        
+    # Unpack input points for clarity
+    p1, p2, p3 = points  # Contact points and reference point
+    cx, cy = circle_center  # Center of the circle of curvature
+    
+    # Create a new figure with appropriate size
     plt.figure(figsize=(12, 6))
-    plt.imshow(photo)
-
-    # Plot points
-    plt.plot(p1[0], p1[1], "o", color="black")  # Point A
-    plt.plot(p1[0], p3[1], "o", color="black")  # Point B
-    plt.plot(cx, cy, "o", color="black")  # Point O
-
-    # Label points
+    plt.imshow(photo)  # Use the original image as background
+    
+    # Plot the key points in the geometric construction
+    plt.plot(p1[0], p1[1], "o", color="black")  # Point A (left top contact point)
+    plt.plot(p1[0], p3[1], "o", color="black")  # Point B (vertical projection below A)
+    plt.plot(cx, cy, "o", color="black")        # Point O (circle center)
+    
+    # Add labels to the points for clarity
     plt.text(p1[0] + 5, p1[1] - 10, "A", color="black", fontsize=12, weight="bold")
     plt.text(p1[0] + 5, p3[1] - 10, "B", color="black", fontsize=12, weight="bold")
     plt.text(cx + 5, cy - 10, "O", color="black", fontsize=12, weight="bold")
-
-    # Draw triangle
+    
+    # Draw the triangle connecting the points
+    # The sequence creates a complete path: A -> B -> O -> A
     plt.plot(
-        [p1[0], p1[0], cx, p1[0]],
-        [p1[1], p3[1], cy, p1[1]],
+        [p1[0], p1[0], cx, p1[0]],  # X-coordinates of the triangle vertices
+        [p1[1], p3[1], cy, p1[1]],  # Y-coordinates of the triangle vertices
         linestyle="-",
         color="black",
         linewidth=2,
     )
-
+    
+    # Add a title to explain the diagram
     plt.title("Annotated Photo with Points A, B, O and Triangle")
+    
+    # Remove axis ticks for cleaner presentation
     plt.axis("off")
     plt.tight_layout()
     plt.show()
 
 
-# Main analysis function
+    """
+    Perform complete meniscus analysis on an image of a fluid channel.
+    
+    This function orchestrates the entire analysis pipeline for meniscus characterization:
+    1. Detecting horizontal channel boundaries
+    2. Finding vertical meniscus contact points
+    3. Computing the circle of curvature from key points
+    4. Calculating contact angles
+    5. Generating visualizations of the results
+    
+    The analysis is based on the physical principle that a fluid meniscus in a channel
+    forms a circular arc due to surface tension forces.
+    
+    Args:
+        image_path (str): Path to the image file to analyze
+        enable_plot (bool, optional): Whether to display visualizations. Defaults to True.
+    
+    Returns:
+        dict: A dictionary containing all key measurements and parameters:
+              - contact_angle: Angle between meniscus and wall (degrees)
+              - beta: Supplementary angle (180° - contact_angle)
+              - radius: Radius of the meniscus curvature (pixels)
+              - top_index, bottom_index: Horizontal channel boundaries
+              - left_index, right_index: Vertical meniscus contact points
+    """
+# Main analysis function to analyse meniscus on an image
 def analyze_meniscus(image_path, enable_plot=True):
-    """Perform complete meniscus analysis on an image."""
-    # Find horizontal boundaries
+    
+    # Step 1: Find the horizontal boundaries of the channel
+    # This identifies the top and bottom walls of the channel
     top_index, bottom_index = find_horizontal_boundaries(image_path, False)
-
-    # Find vertical boundaries
+    
+    # Step 2: Find the vertical boundaries and meniscus contact points
+    # This identifies where the meniscus contacts the channel walls
     vertical_boundaries = analyze_vertical_differences(
         image_path, top_index, bottom_index, enable_plot
     )
-
-    # Compute key points
-    left_index = min(vertical_boundaries)
-    right_index = max(vertical_boundaries)
-
-    p1 = [left_index, top_index]
-    p2 = [left_index, bottom_index]
-    middle_of_channel = top_index + (bottom_index - top_index) // 2
-    p3 = [right_index, middle_of_channel]
-
-    # Compute circle parameters
-    cx, cy, r = circle_from_3pts(p1, p2, p3)
-
-    # Compute contact angle
-    contact_angle = compute_contact_angle(p1, cx, cy)
-    beta = 180 - contact_angle
-
+    
+    # Step 3: Compute key geometric points for the analysis
+    left_index = min(vertical_boundaries)   # Left contact point column
+    right_index = max(vertical_boundaries)  # Right contact point column
+    
+    # Define three points that define the meniscus curve:
+    p1 = [left_index, top_index]  # Left top contact point
+    p2 = [left_index, bottom_index]  # Left bottom reference (not used in circle calculation)
+    middle_of_channel = top_index + (bottom_index - top_index) // 2  # Middle row of channel
+    p3 = [right_index, middle_of_channel]  # Right middle point on meniscus
+    
+    # Step 4: Compute the parameters of the circle that best fits the meniscus
+    cx, cy, r = circle_from_3pts(p1, p2, p3)  # Center x, center y, radius
+    
+    # Step 5: Calculate the contact angle between meniscus and wall
+    contact_angle = compute_contact_angle(p1, cx, cy)  # Angle in degrees
+    beta = 180 - contact_angle  # Supplementary angle
+    
+    # Print the primary result
     print(f"Contact angle at wall: {contact_angle:.1f}°")
-
-    # Load image for visualization
+    
+    # Step 6: Load the original image for visualization
     photo = mpimg.imread(image_path)
-    # Plot results
+    
+    # Step 7: Generate visualizations of the results
+    # Plot the meniscus with all annotations
     plot_meniscus_with_annotations(
         photo=photo,
         points=[p1, p2, p3],
@@ -791,9 +948,11 @@ def analyze_meniscus(image_path, enable_plot=True):
         angle_data=[contact_angle, beta],
         enable_plot=enable_plot,
     )
-
+    
+    # Plot the geometric construction diagram
     plot_triangle_diagram(photo, [p1, p2, p3], [cx, cy], enable_plot)
-
+    
+    # Step 8: Return all results as a dictionary for further processing
     return {
         "contact_angle": contact_angle,
         "beta": beta,
