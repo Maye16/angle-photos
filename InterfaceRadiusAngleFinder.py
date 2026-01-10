@@ -1,4 +1,4 @@
-#Written by Maja Pakula
+#Written by Maja Pakula and Wiktor Pakula
 
 import cv2
 import numpy as np
@@ -10,7 +10,7 @@ import matplotlib.image as mpimg #Import Matplotlib's image module for RGB image
     Load an image from disk and determine its properties.
     
     This function uses OpenCV to read an image file with all channels intact,
-    including any alpha (transparency) channel if present. It performs basic
+    including any theta (transparency) channel if present. It performs basic
     validation to ensure the image was successfully loaded and extracts key
     image properties for easier downstream processing.
     
@@ -19,24 +19,24 @@ import matplotlib.image as mpimg #Import Matplotlib's image module for RGB image
     
     Returns:
     - image (ndarray): The loaded image as a NumPy array in BGR(A) format
-    - has_alpha (bool): True if the image contains an alpha channel (4 channels total)
+    - has_theta (bool): True if the image contains an theta channel (4 channels total)
     - height (int): Height of the image in pixels
     - width (int): Width of the image in pixels
     
     Raises:
     - ValueError: If the image cannot be loaded from the specified path
     
-    Note: Uses cv2.IMREAD_UNCHANGED flag to preserve all channels including alpha.
-    The color order is BGR (or BGRA with alpha), not RGB, following OpenCV convention.
+    Note: Uses cv2.IMREAD_UNCHANGED flag to preserve all channels including theta.
+    The color order is BGR (or BGRA with theta), not RGB, following OpenCV convention.
     """
 # Image Loading from Disk, Defining its Properties and Processing Functions
 def load_image(image_path):
-    """Load an image and detect if it has an alpha channel."""
+    """Load an image and detect if it has an theta channel."""
     image = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
     if image is None:
         raise ValueError(f"Could not load image at {image_path}.")
-    has_alpha = image.shape[2] == 4
-    return image, has_alpha, image.shape[0], image.shape[1]
+    has_theta = image.shape[2] == 4
+    return image, has_theta, image.shape[0], image.shape[1]
 
 
 """
@@ -48,18 +48,18 @@ def load_image(image_path):
     
     Parameters:
     - px: numpy array containing a single pixel's BGR or BGRA values
-    - has_alpha: boolean indicating whether the pixel has an alpha channel (BGRA format)
+    - has_theta: boolean indicating whether the pixel has an theta channel (BGRA format)
     
     Returns:
     - float: grayscale intensity value calculated using the standard ITU-R BT.601 formula
              (0.299R + 0.587G + 0.114B)
-    - None: if the pixel is fully transparent (alpha=0) or completely black
+    - None: if the pixel is fully transparent (theta=0) or completely black
     
     Note: Input pixel is expected in BGR(A) format (not RGB), as commonly used in OpenCV.
     """
 # Convert a BGR(A) pixel to grayscale intensity, ignoring transparent or black pixels
-def pixels_to_grayscale(px, has_alpha):
-    if has_alpha and px[3] == 0:
+def pixels_to_grayscale(px, has_theta):
+    if has_theta and px[3] == 0:
         return None
     if np.all(px[:3] == 0):
         return None
@@ -79,7 +79,7 @@ def pixels_to_grayscale(px, has_alpha):
    Parameters:
    - image: 2D array of pixels in BGR(A) format
    - axis: string ("rows" or "cols") specifying direction of analysis
-   - has_alpha: boolean indicating whether the image has an alpha channel
+   - has_theta: boolean indicating whether the image has an theta channel
    
    Returns:
    - diffs: list of mean intensity differences between adjacent rows or columns
@@ -87,15 +87,15 @@ def pixels_to_grayscale(px, has_alpha):
    Note: Returns values of 0 for areas where no valid pixel comparisons could be made.
     """
 #Compute mean grayscale differences along rows or columns
-def compute_mean_differences(image, axis, has_alpha):
+def compute_mean_differences(image, axis, has_theta):
     diffs = []
 
     if axis == "rows":
         for i in range(1, image.shape[0]):
             values = []
             for px1, px2 in zip(image[i - 1], image[i]):
-                g1 = pixels_to_grayscale(px1, has_alpha)
-                g2 = pixels_to_grayscale(px2, has_alpha)
+                g1 = pixels_to_grayscale(px1, has_theta)
+                g2 = pixels_to_grayscale(px2, has_theta)
                 if g1 is not None and g2 is not None:
                     values.append(abs(g2 - g1))
             diffs.append(np.mean(values) if values else 0)
@@ -103,8 +103,8 @@ def compute_mean_differences(image, axis, has_alpha):
         for i in range(1, image.shape[1]):
             values = []
             for px1, px2 in zip(image[:, i - 1], image[:, i]):
-                g1 = pixels_to_grayscale(px1, has_alpha)
-                g2 = pixels_to_grayscale(px2, has_alpha)
+                g1 = pixels_to_grayscale(px1, has_theta)
+                g2 = pixels_to_grayscale(px2, has_theta)
                 if g1 is not None and g2 is not None:
                     values.append(abs(g2 - g1))
             diffs.append(np.mean(values) if values else 0)
@@ -272,8 +272,8 @@ def show_image_with_lines(image, lines, title=None, enable_plot=True):
 # Horizontal Analysis Functions to identify the top and bottom boundaries of a channel.
 def find_horizontal_boundaries(image_path, enable_plot=True):
     # Load image and compute row-wise differences
-    image, has_alpha, height, width = load_image(image_path)
-    differences = compute_mean_differences(image, "rows", has_alpha)
+    image, has_theta, height, width = load_image(image_path)
+    differences = compute_mean_differences(image, "rows", has_theta)
 
 
     """
@@ -352,21 +352,21 @@ def find_horizontal_boundaries(image_path, enable_plot=True):
     
     This function takes the original image and draws horizontal red lines at the positions
     identified as the top and bottom boundaries of the channel or region of interest.
-    The function handles images with or without alpha channels appropriately.
+    The function handles images with or without theta channels appropriately.
     
     Args:
         image (numpy.ndarray): The original image array
         top_index (int): Row index for the top boundary line
         bottom_index (int): Row index for the bottom boundary line
         width (int): Width of the image in pixels
-        has_alpha (bool): Whether the image has an alpha channel
+        has_theta (bool): Whether the image has an theta channel
     
     Returns:
         numpy.ndarray: A copy of the original image with red horizontal lines drawn
                       at the specified boundary positions
     """
-    # Draw red lines on a copy of the image (convert to BGR if it has alpha)
-    image_display = image[:, :, :3].copy() if has_alpha else image.copy()
+    # Draw red lines on a copy of the image (convert to BGR if it has theta)
+    image_display = image[:, :, :3].copy() if has_theta else image.copy()
     cv2.line(image_display, (0, top_index), (width, top_index), (0, 0, 255), 2)
     cv2.line(image_display, (0, bottom_index), (width, bottom_index), (0, 0, 255), 2)
 
@@ -506,12 +506,12 @@ def find_vertical_boundaries(differences, start_idx, end_idx):
     #first_last_local_max_index = [0, -1]  
     # Use full subregion width as fallback
     # Visualize the detected peaks, thresholds, and selected boundaries for debugging
-    debug_plot(
-        local_maxima, # Y-values: heights of local maxima
-        local_maxima_index, # X-values: positions of local maxima
-        horizontalLines=[threshold1, threshold2], # Show threshold levels
-        verticalLines=first_last_local_max_index, # Show selected boundary positions
-    )
+    # debug_plot(
+    #     local_maxima, # Y-values: heights of local maxima
+    #     local_maxima_index, # X-values: positions of local maxima
+    #     horizontalLines=[threshold1, threshold2], # Show threshold levels
+    #     verticalLines=first_last_local_max_index, # Show selected boundary positions
+    # )
     # Convert subregion coordinates back to full image coordinates
     # The indices were calculated relative to the subregion starting at start_idx,
     # so we add start_idx to map them back to the original coordinate system
@@ -548,7 +548,7 @@ def find_vertical_boundaries(differences, start_idx, end_idx):
 # Analyse vertical differences in an image to detect meniscus boundaries in a channel
 def analyze_vertical_differences(image_path, top_index, bottom_index, enable_plot=True):
     # Load image and compute column-wise differences
-    image, has_alpha, height, width = load_image(image_path)
+    image, has_theta, height, width = load_image(image_path)
     
     # Crop image to only include channel and trim horizontal edges
     # A small percentage (4%) is trimmed from each side to remove potential edge artifacts
@@ -559,20 +559,20 @@ def analyze_vertical_differences(image_path, top_index, bottom_index, enable_plo
     newWidth = int((1 - 2 * CropAmount) * width)
     
     # Display the cropped channel region
-    plt.imshow(image)
-    plt.show()
+    #plt.imshow(image)
+    #plt.show()
     
     # Calculate pixel differences between adjacent columns
-    differences = compute_mean_differences(image, "cols", has_alpha)
+    differences = compute_mean_differences(image, "cols", has_theta)
     
     # Plot raw column differences if debugging is enabled
-    debug_plot(
-        differences,
-        title="Raw Column Differences",
-        xlabel="Column Index",
-        ylabel="Mean Gray Diff",
-        enable_plot=enable_plot,
-    )
+    # debug_plot(
+    #     differences,
+    #     title="Raw Column Differences",
+    #     xlabel="Column Index",
+    #     ylabel="Mean Gray Diff",
+    #     enable_plot=enable_plot,
+    # )
     
     # Apply smoothing to reduce noise while preserving significant transitions
     # Window size is proportional to image width for adaptability across different resolutions
@@ -580,13 +580,13 @@ def analyze_vertical_differences(image_path, top_index, bottom_index, enable_plo
     smoothed_differences = smooth_data(differences, window_size)
     
     # Plot smoothed differences for visualization
-    debug_plot(
-        smoothed_differences,
-        title="Smoothed Column Differences",
-        xlabel="Column Index",
-        ylabel="Mean Gray Diff",
-        enable_plot=enable_plot,
-    )
+    # debug_plot(
+    #     smoothed_differences,
+    #     title="Smoothed Column Differences",
+    #     xlabel="Column Index",
+    #     ylabel="Mean Gray Diff",
+    #     enable_plot=enable_plot,
+    # )
     
     # Calculate derivative to identify regions of rapid change
     # Positive peaks indicate transitions from dark to light
@@ -606,7 +606,7 @@ def analyze_vertical_differences(image_path, top_index, bottom_index, enable_plo
     end_idx = int(max(max_idx, min_idx) + interfaceWidth / 2)
     
     # Visualize the derivative and selected region of interest
-    debug_plot(derivative, range(len(derivative)), verticalLines=[start_idx, end_idx])
+    #debug_plot(derivative, range(len(derivative)), verticalLines=[start_idx, end_idx])
     
     # Perform detailed boundary detection within the region of interest
     vertical_boundaries = find_vertical_boundaries(differences, start_idx, end_idx)
@@ -747,7 +747,7 @@ def plot_meniscus_with_annotations(
     cx, cy, r = circle_params  # Circle center coordinates and radius
     top_index, bottom_index = boundaries  # Horizontal channel boundaries
     vertical_indices, left_index, right_index = vertical_boundaries  # Vertical boundaries
-    contact_angle, beta = angle_data  # Contact angles at each interface
+    contact_angle = angle_data[0]  # Extract scalar contact angle
     
     # Generate smooth arc representing the meniscus curve between contact points
     xs, ys = generate_arc_points(cx, cy, r, p1, p2)
@@ -768,7 +768,39 @@ def plot_meniscus_with_annotations(
         colors="red",
         linewidth=2,
     )
+
+
+    # Elias code: draw the contact line and small angle arc
+    t = contact_angle -90  # degrees
+    # Direction of the tangent line
+    secondLineDirection = np.array([np.cos(np.deg2rad(t)), np.sin(np.deg2rad(t))])
+    l = 100  # line length
+    p4 = p1 + secondLineDirection * l
+    plt.plot([p1[0], p4[0]], [p1[1], p4[1]], c='black')
+
+    # --- Draw a small arc indicating the contact angle (< 90°) ---
+    angle_r = 40.0  # radius of the mini‑arc in pixels
+    ref_dir = np.array([1.0, 0.0])  # reference direction: vertical downward
+    ref_angle = np.arctan2(ref_dir[1], ref_dir[0])
+
+    # unit tangent direction
+    contact_dir_unit = secondLineDirection / np.linalg.norm(secondLineDirection)
+    contact_angle_rad = np.arctan2(contact_dir_unit[1], contact_dir_unit[0])
+
+    # smallest angle difference in [-π, π]
+    da = (contact_angle_rad - ref_angle + np.pi) % (2 * np.pi) - np.pi
+    # ensure the arc span is < 90° by flipping to supplementary if needed
+    if abs(da) > np.deg2rad(90):
+        da = np.sign(da) * np.deg2rad(180) - da
+
+    theta = np.linspace(ref_angle, ref_angle + da, 50)
+    angle_xs = p1[0] + angle_r * np.cos(theta)
+    angle_ys = p1[1] + angle_r * np.sin(theta)
+    plt.plot(angle_xs, angle_ys, c="black", linewidth=2)
+
+
     
+
     # Draw blue curve representing the fitted meniscus profile
     plt.plot(xs, ys, "-", color="blue", linewidth=3)
     
@@ -787,24 +819,24 @@ def plot_meniscus_with_annotations(
     )
     
     # Add left contact angle annotation
-    plt.text(
-        p1[0] + 10,
-        bottom_index - 20,
-        r"$\alpha = {}^\circ$".format(f"{contact_angle:.1f}"),
-        color="purple",
-        fontsize=12,
-        bbox=dict(facecolor="white", alpha=0.7),
-    )
+    # plt.text(
+    #     p1[0] + 10,
+    #     bottom_index - 20,
+    #     r"$\theta = {}^\circ$".format(f"{contact_angle:.1f}"),
+    #     color="purple",
+    #     fontsize=12,
+    #     bbox=dict(facecolor="white", alpha=0.7),
+    # )
     
     # Add right contact angle annotation
-    plt.text(
-        p2[0] + 10,
-        bottom_index + 20,
-        r"$\beta = {}^\circ$".format(f"{beta:.1f}"),
-        color="purple",
-        fontsize=12,
-        bbox=dict(facecolor="white", alpha=0.7),
-    )
+    #plt.text(
+        #p2[0] + 10,
+        #bottom_index + 20,
+        #r"$\beta = {}^\circ$".format(f"{beta:.1f}"),
+        #color="purple",
+        #fontsize=12,
+        #bbox=dict(facecolor="white", theta=0.7),
+    #)
     
     # Draw a dashed line showing one radius of the circle
     plt.plot([cx, p1[0]], [cy, p1[1]], linestyle="--", color="blue", linewidth=2)
@@ -955,7 +987,7 @@ def analyze_meniscus(image_path, enable_plot=True):
     
     # Step 5: Calculate the contact angle between meniscus and wall
     contact_angle = compute_contact_angle(p1, cx, cy)  # Angle in degrees
-    beta = 180 - contact_angle  # Supplementary angle
+    #beta = 180 - contact_angle  # Supplementary angle
     
     # Print the primary result
     print(f"Contact angle at wall: {contact_angle:.1f}°")
@@ -971,17 +1003,17 @@ def analyze_meniscus(image_path, enable_plot=True):
         circle_params=[cx, cy, r],
         boundaries=[top_index, bottom_index],
         vertical_boundaries=[vertical_boundaries, left_index, right_index],
-        angle_data=[contact_angle, beta],
+        angle_data=[contact_angle],
         enable_plot=enable_plot,
     )
     
     # Plot the geometric construction diagram
-    plot_triangle_diagram(photo, [p1, p2, p3], [cx, cy], enable_plot)
+    #plot_triangle_diagram(photo, [p1, p2, p3], [cx, cy], enable_plot)
     
     # Step 8: Return all results as a dictionary for further processing
     return {
         "contact_angle": contact_angle,
-        "beta": beta,
+        #"beta": beta,
         "radius": r,
         "top_index": top_index,
         "bottom_index": bottom_index,
@@ -992,5 +1024,6 @@ def analyze_meniscus(image_path, enable_plot=True):
 
 # Execute analysis if run directly
 if __name__ == "__main__":
-    image_path = "Figures/test_angle_1.png"
+    #image_path = "/Users/maye/Desktop/PhD/Wiktor stage/angle photos/Figures/before_plasma.png"
+    image_path = "/Users/maye/Desktop/PhD/Stage Wiktor/angle photos/Figures/after_plasma.png"
     results = analyze_meniscus(image_path, enable_plot=True)
