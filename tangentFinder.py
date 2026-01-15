@@ -5,37 +5,14 @@ from helperFunctions import (
     smooth,
     load_image,
     add_radial_line,
-    compute_mean_differences,
+    find_channel_edges,
     find_local_maxima,
     debug_plot,
-    show_image_with_lines,
     show_image_with_marks,
     get_values_in_circle,
     get_miniscus_width,
 )
 
-
-# Horizontal Analysis Functions to identify the top and bottom boundaries of a channel.
-def find_channel_edges(gray, enable_plot=True):
-    differences = compute_mean_differences(gray, "rows")
-    mid = gray.shape[0] // 2
-
-    val, index = find_local_maxima(differences[:mid], 2)
-    top_idx = int(np.mean(index)) + 1
-
-    val, index = find_local_maxima(differences[mid:], 2)
-    bottom_idx = int(np.mean(index)) + mid + 1
-
-    # Show the result
-    if enable_plot:
-        show_image_with_lines(
-            gray,
-            horizontal_lines=[int(top_idx), int(bottom_idx)],
-            title="Image with Max Row Differences Marked",
-            enable_plot=enable_plot,
-        )
-
-    return top_idx, bottom_idx
 
 
 def find_contact_point(gray, channel_edge):
@@ -142,27 +119,42 @@ def find_tangent(gray, point, search_radius=12, debug=False):
     w, t  = find_tangent_and_width(gray, new_point, search_radius, debug=debug)
     return t, new_point
 
-if __name__ == "__main__":
-    image_path = "Figures/after_plasma.png"
-    image_path = "Figures/test_angle_47.png"
-    image_path = "Figures/test_angle_46.png"
-    image_path = "Figures/test_angle_53.png"
-    image_path = "Figures/test_angle_54.png"
-    gray = load_image(image_path, gray=True)
-    top, bottom = find_channel_edges(gray, enable_plot=False)
+def find_tangents(image_path, show=True, debug=False):
+    gray = load_image(image_path, gray=True, debug=debug)
+    top, bottom = find_channel_edges(gray, show=debug, debug=debug)
     top_point = find_contact_point(gray, top)
     bottom_point = find_contact_point(gray, bottom)
-    top_tangent, top_point = find_tangent(gray, top_point, debug=False)
-    bottom_tangent, bottom_point = find_tangent(gray, bottom_point, debug=False)
-    ax = show_image_with_marks(
-        gray,
-        contact_points=[top_point, bottom_point],
-        horizontal_lines=[int(top), int(bottom)],
-        title="Contact Points on Channel Edges",
-        enable_plot=True,
-        mark_radius=12,
-        show=False
-    )
-    add_radial_line(ax, top_point, top_tangent, 30)
-    add_radial_line(ax, bottom_point, bottom_tangent, 30)
-    plt.show()
+    top_tangent, top_point = find_tangent(gray, top_point, debug=debug)
+    bottom_tangent, bottom_point = find_tangent(gray, bottom_point, debug=debug)
+    print(image_path)
+    print(f"Top tangent: {180+np.rad2deg(top_tangent):.0f}")
+    print(f"Bottom tangent: {180-np.rad2deg(bottom_tangent):.0f}")
+
+    if show:
+        ax = show_image_with_marks(
+            gray,
+            contact_points=[top_point, bottom_point],
+            horizontal_lines=[int(top), int(bottom)],
+            title="Contact Points on Channel Edges",
+            enable_plot=True,
+            mark_radius=12,
+            show=False
+        )
+        add_radial_line(ax, top_point, top_tangent, 30)
+        add_radial_line(ax, bottom_point, bottom_tangent, 30)
+        plt.show()
+
+
+if __name__ == "__main__":
+    import os
+
+    folder = "Figures/article_figures"
+    for filename in sorted(os.listdir(folder)):
+        if not filename.lower().endswith((".png", ".jpg", ".jpeg", ".tif", ".tiff")):
+            continue
+        image_path = os.path.join(folder, filename)
+        try:
+            find_tangents(image_path)
+        except ValueError as e:
+            print(e)
+            print(f"Analysis failed for {image_path}")

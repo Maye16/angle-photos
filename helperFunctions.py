@@ -17,10 +17,10 @@ def load_image_from_disk(image_path: str) -> np.ndarray:
     return np.array(image)
 
 
-def load_image(image_path, gray=False, autoCrop=True) -> np.ndarray:
+def load_image(image_path, gray=False, autoCrop=True, debug=False) -> np.ndarray:
     image = load_image_from_disk(image_path)
     if autoCrop:
-        image = auto_crop(image, debug=False)
+        image = auto_crop(image, debug=debug)
     if gray:
         return grayscale_image(image)
     else:
@@ -328,16 +328,80 @@ def get_miniscus_width(theta1, theta2, radius):
     # Euclidean distance between the two points
     return np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
 
-def auto_crop(image, extra=40, debug=False):
-    gray = grayscale_image(image)
+
+# Horizontal Analysis Functions to identify the top and bottom boundaries of a channel.
+def find_channel_edges(gray, show=False, debug=False):
     differences = compute_mean_differences(gray, "rows")
     mid = gray.shape[0] // 2
 
-    val, index = find_local_maxima(differences[:mid], 2)
-    top_idx = int(np.mean(index)) + 1
+    # Find two candidate maxima for each half. Usually averaging is more stable,
+    # but for bad images the two maxima can drift far apart. In that case,
+    # fall back to using a single maximum ("second method").
 
-    val, index = find_local_maxima(differences[mid:], 2)
-    bottom_idx = int(np.mean(index)) + mid + 1
+    top_val, top_candidates = find_local_maxima(differences[:mid], 2)
+    bottom_val, bottom_candidates = find_local_maxima(differences[mid:], 2)
+
+    top_candidates = np.asarray(top_candidates, dtype=int)
+    bottom_candidates = np.asarray(bottom_candidates, dtype=int)
+
+    def pick_edge(candidates, values=None, offset=0, max_sep=10):
+
+        candidates = np.asarray(candidates, dtype=int)
+        if candidates.size == 0:
+            return offset  # extremely defensive fallback
+        if candidates.size == 1:
+            return int(candidates[0]) + offset
+
+        # Optional weights (peak heights). If provided, compute a weighted average.
+        if values is not None:
+            w = np.asarray(values, dtype=np.float64)
+            # Guard against shape mismatch or non-finite weights.
+            if w.shape != candidates.shape:
+                w = None
+            else:
+                w = np.where(np.isfinite(w) & (w > 0), w, 0.0)
+                if np.sum(w) <= 0:
+                    w = None
+        else:
+            w = None
+
+        # Default: average ("first method")
+        if w is None:
+            avg_idx = int(np.round(np.mean(candidates))) + offset
+        else:
+            avg_idx = int(np.round(np.sum(candidates * w) / np.sum(w))) + offset
+
+        # If the two maxima are far apart, use the stronger one ("second method")
+        if abs(int(candidates[1]) - int(candidates[0])) > max_sep:
+            if w is None:
+                best = int(candidates[0])
+            else:
+                best = int(candidates[int(np.argmax(w))])
+            return best + offset
+
+        return avg_idx
+
+    top_idx = pick_edge(top_candidates, top_val, offset=0, max_sep=10)
+    bottom_idx = pick_edge(bottom_candidates, bottom_val, offset=mid, max_sep=10)
+
+    if debug:
+        debug_plot(differences, i_markers=[top_idx, bottom_idx])
+
+    # Show the result
+    if show:
+        show_image_with_lines(
+            gray,
+            horizontal_lines=[int(top_idx), int(bottom_idx)],
+            title="Image with Max Row Differences Marked",
+            enable_plot=show,
+        )
+
+    return top_idx, bottom_idx
+
+
+def auto_crop(image, extra=40, debug=False):
+    gray = grayscale_image(image)
+    top_idx, bottom_idx = find_channel_edges(gray, debug=debug)
 
     differences = compute_mean_differences(gray, "cols")
     val, index = find_local_maxima(differences, 1)
@@ -377,27 +441,21 @@ def auto_crop(image, extra=40, debug=False):
     half = side / 2.0
 
     # Proposed bounds.
-    y0 = int(np.floor(cy - half))
-    y1 = y0 + side
+    y0 = top_idx-extra
+    y1 = bottom_idx+extra
     x0 = int(np.floor(cx - half))
     x1 = x0 + side
 
     # Shift the window back inside the image if it goes out of bounds.
     if y0 < 0:
-        y1 -= y0
         y0 = 0
     if y1 > H:
-        y0 -= (y1 - H)
         y1 = H
-        y0 = max(0, y0)
 
     if x0 < 0:
-        x1 -= x0
         x0 = 0
     if x1 > W:
-        x0 -= (x1 - W)
         x1 = W
-        x0 = max(0, x0)
 
     cropped_image = image[y0:y1, x0:x1]
 
@@ -405,8 +463,8 @@ def auto_crop(image, extra=40, debug=False):
         # Visualize the chosen crop rectangle.
         show_image_with_lines(
             gray,
-            horizontal_lines=[top_idx, bottom_idx, y0, y1 - 1],
-            vertical_lines=[middle_idx, x0, x1 - 1],
+            horizontal_lines=[ y0, y1 - 1],
+            vertical_lines=[ x0, x1 - 1],
             title="Auto-crop: detected edges + crop bounds",
             enable_plot=True,
         )
