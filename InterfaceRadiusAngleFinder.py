@@ -1,9 +1,9 @@
-#Written by Maja Pakula and Wiktor Pakula
+# Written by Maja Pakula and Wiktor Pakula
 
 import cv2
 import numpy as np
 from matplotlib import pyplot as plt
-import matplotlib.image as mpimg #Import Matplotlib's image module for RGB image loading and visualization capabilities
+import matplotlib.image as mpimg  # Import Matplotlib's image module for RGB image loading and visualization capabilities
 
 
 """
@@ -29,6 +29,8 @@ import matplotlib.image as mpimg #Import Matplotlib's image module for RGB image
     Note: Uses cv2.IMREAD_UNCHANGED flag to preserve all channels including theta.
     The color order is BGR (or BGRA with theta), not RGB, following OpenCV convention.
     """
+
+
 # Image Loading from Disk, Defining its Properties and Processing Functions
 def load_image(image_path):
     """Load an image and detect if it has an theta channel."""
@@ -57,6 +59,8 @@ def load_image(image_path):
     
     Note: Input pixel is expected in BGR(A) format (not RGB), as commonly used in OpenCV.
     """
+
+
 # Convert a BGR(A) pixel to grayscale intensity, ignoring transparent or black pixels
 def pixels_to_grayscale(px, has_theta):
     if has_theta and px[3] == 0:
@@ -86,7 +90,9 @@ def pixels_to_grayscale(px, has_theta):
    
    Note: Returns values of 0 for areas where no valid pixel comparisons could be made.
     """
-#Compute mean grayscale differences along rows or columns
+
+
+# Compute mean grayscale differences along rows or columns
 def compute_mean_differences(image, axis, has_theta):
     diffs = []
 
@@ -132,7 +138,9 @@ def compute_mean_differences(image, axis, has_theta):
    
    Note: If multiple elements tie for second place, returns the index of the first occurrence.
     """
-#Find the index of the second largest value in an array
+
+
+# Find the index of the second largest value in an array
 def second_largest_arg(arr):
     arr = np.asarray(arr)
     if arr.size < 2:
@@ -167,6 +175,8 @@ def second_largest_arg(arr):
    Note: Vertical reference lines are green dashed lines, while horizontal 
    reference lines are red dashed lines.
     """
+
+
 # Visualization Functions to plot something with given labels and settings
 def debug_plot(
     y,
@@ -222,6 +232,8 @@ def debug_plot(
    doesn't actually draw these lines on the image. This may be intended for future
    enhancement or is leftover from previous development.
     """
+
+
 # Display an image with specified lines
 def show_image_with_lines(image, lines, title=None, enable_plot=True):
     if not enable_plot:
@@ -269,12 +281,13 @@ def show_image_with_lines(image, lines, title=None, enable_plot=True):
         - compute_mean_differences: To calculate row-wise differences
         - debug_plot: To visualize the differences
     """
+
+
 # Horizontal Analysis Functions to identify the top and bottom boundaries of a channel.
 def find_horizontal_boundaries(image_path, enable_plot=True):
     # Load image and compute row-wise differences
     image, has_theta, height, width = load_image(image_path)
     differences = compute_mean_differences(image, "rows", has_theta)
-
 
     """
     Creates and optionally displays a visualization of data for debugging purposes.
@@ -315,7 +328,6 @@ def find_horizontal_boundaries(image_path, enable_plot=True):
         enable_plot=enable_plot,
     )
 
-
     """
     Identifies the most significant horizontal boundaries in an image based on row differences.
     
@@ -346,7 +358,6 @@ def find_horizontal_boundaries(image_path, enable_plot=True):
     )  # +1 to correct for starting at row 1
     bottom_index = second_largest_arg(differences[mid:]) + mid + 1
 
-
     """
     Creates a visualization of the detected horizontal boundaries on the input image.
     
@@ -369,7 +380,6 @@ def find_horizontal_boundaries(image_path, enable_plot=True):
     image_display = image[:, :, :3].copy() if has_theta else image.copy()
     cv2.line(image_display, (0, top_index), (width, top_index), (0, 0, 255), 2)
     cv2.line(image_display, (0, bottom_index), (width, bottom_index), (0, 0, 255), 2)
-
 
     """
     Displays the image with the detected horizontal boundaries marked with red lines.
@@ -424,13 +434,14 @@ def find_horizontal_boundaries(image_path, enable_plot=True):
         has the same size as the input array, with boundary effects handled
         appropriately.
     """
+
+
 # Vertical Analysis Functions
 def smooth_data(data, window_size):
-    #Apply convolution smoothing to data
+    # Apply convolution smoothing to data
     window = np.ones(window_size) / window_size
     return np.convolve(data, window, mode="same")
- 
- 
+
     """
     Find vertical boundaries based on local maxima in column-wise differences.
     
@@ -464,8 +475,10 @@ def smooth_data(data, window_size):
         This function includes debugging visualization that shows the local maxima,
         the thresholds used, and the selected boundary points.
     """
+
+
 def find_vertical_boundaries(differences, start_idx, end_idx):
-    #Find vertical boundaries based on local maxima in differences
+    # Find vertical boundaries based on local maxima in differences
     subregion_differences = np.array(differences[start_idx : end_idx + 1])
 
     # Find local maxima
@@ -479,31 +492,35 @@ def find_vertical_boundaries(differences, start_idx, end_idx):
     )
     local_maxima = subregion_differences[local_maxima_index]
 
-# Calculate adaptive thresholds for boundary detection
-# ----------------------------------------------------
-# We determine two separate thresholds for left and right boundaries by:
-# 1. Examining regions outside our area of interest (before start_idx and after end_idx)
-# 2. Calculating the mean difference value in each region
-# 3. Multiplying by a margin factor to set thresholds above background noise
-#
-# The margin factor (1.8) was determined empirically and provides good separation
-# between significant edge transitions and background variations
+    # Calculate adaptive thresholds for boundary detection
+    # ----------------------------------------------------
+    # We determine two separate thresholds for left and right boundaries by:
+    # 1. Examining regions outside our area of interest (before start_idx and after end_idx)
+    # 2. Calculating the mean difference value in each region
+    # 3. Multiplying by a margin factor to set thresholds above background noise
+    #
+    # The margin factor (1.8) was determined empirically and provides good separation
+    # between significant edge transitions and background variations
 
     margin = 1.8
-    threshold1 = np.mean(differences[:start_idx]) * margin # Left boundary threshold
-    threshold2 = np.mean(differences[end_idx:]) * margin # Right boundary threshold
+    threshold1 = np.mean(differences[:start_idx]) * margin  # Left boundary threshold
+    threshold2 = np.mean(differences[end_idx:]) * margin  # Right boundary threshold
     # Find boundary positions by identifying the first and last local maxima
-# that exceed their respective thresholds
-# --------------------------------------------------------------------
-# Note: The try-except block has been commented out, which could lead to IndexError
-# if no peaks exceed the thresholds.
-    #try:
-    first_local_max_index = local_maxima_index[local_maxima > threshold1][0] # Leftmost significant peak
-    last_local_max_index = local_maxima_index[local_maxima > threshold2][-1] # Rightmost significant peak
+    # that exceed their respective thresholds
+    # --------------------------------------------------------------------
+    # Note: The try-except block has been commented out, which could lead to IndexError
+    # if no peaks exceed the thresholds.
+    # try:
+    first_local_max_index = local_maxima_index[local_maxima > threshold1][
+        0
+    ]  # Leftmost significant peak
+    last_local_max_index = local_maxima_index[local_maxima > threshold2][
+        -1
+    ]  # Rightmost significant peak
     first_last_local_max_index = [first_local_max_index, last_local_max_index]
-    #except IndexError:
+    # except IndexError:
     # Fall back to default boundaries if no peaks exceed thresholds
-    #first_last_local_max_index = [0, -1]  
+    # first_last_local_max_index = [0, -1]
     # Use full subregion width as fallback
     # Visualize the detected peaks, thresholds, and selected boundaries for debugging
     # debug_plot(
@@ -545,11 +562,13 @@ def find_vertical_boundaries(differences, start_idx, end_idx):
         numpy.ndarray: Array containing the column indices of the left and right 
                       meniscus boundaries in the original image coordinate system
     """
+
+
 # Analyse vertical differences in an image to detect meniscus boundaries in a channel
 def analyze_vertical_differences(image_path, top_index, bottom_index, enable_plot=True):
     # Load image and compute column-wise differences
     image, has_theta, height, width = load_image(image_path)
-    
+
     # Crop image to only include channel and trim horizontal edges
     # A small percentage (4%) is trimmed from each side to remove potential edge artifacts
     CropAmount = 0.04
@@ -557,14 +576,14 @@ def analyze_vertical_differences(image_path, top_index, bottom_index, enable_plo
         top_index:bottom_index, int(CropAmount * width) : int((1 - CropAmount) * width)
     ]
     newWidth = int((1 - 2 * CropAmount) * width)
-    
+
     # Display the cropped channel region
-    #plt.imshow(image)
-    #plt.show()
-    
+    # plt.imshow(image)
+    # plt.show()
+
     # Calculate pixel differences between adjacent columns
     differences = compute_mean_differences(image, "cols", has_theta)
-    
+
     # Plot raw column differences if debugging is enabled
     # debug_plot(
     #     differences,
@@ -573,12 +592,12 @@ def analyze_vertical_differences(image_path, top_index, bottom_index, enable_plo
     #     ylabel="Mean Gray Diff",
     #     enable_plot=enable_plot,
     # )
-    
+
     # Apply smoothing to reduce noise while preserving significant transitions
     # Window size is proportional to image width for adaptability across different resolutions
     window_size = int(0.03 * width)  # 3% of image width
     smoothed_differences = smooth_data(differences, window_size)
-    
+
     # Plot smoothed differences for visualization
     # debug_plot(
     #     smoothed_differences,
@@ -587,30 +606,30 @@ def analyze_vertical_differences(image_path, top_index, bottom_index, enable_plo
     #     ylabel="Mean Gray Diff",
     #     enable_plot=enable_plot,
     # )
-    
+
     # Calculate derivative to identify regions of rapid change
     # Positive peaks indicate transitions from dark to light
     # Negative peaks indicate transitions from light to dark
     derivative = np.gradient(smoothed_differences)
     max_idx = np.argmax(derivative)  # Likely one side of the interface
     min_idx = np.argmin(derivative)  # Likely the other side of the interface
-    
+
     # Determine region of interest around the interface
     # Using an extra buffer factor to ensure the entire interface is captured
     extraBuffer = 1.5  # Buffer multiplier for interface width
     interfaceWidth = abs(max_idx - min_idx) * extraBuffer
-    
+
     # Calculate start and end indices for detailed boundary analysis
     # Centered around the detected interface region
     start_idx = int(min(max_idx, min_idx) - interfaceWidth / 2)
     end_idx = int(max(max_idx, min_idx) + interfaceWidth / 2)
-    
+
     # Visualize the derivative and selected region of interest
-    #debug_plot(derivative, range(len(derivative)), verticalLines=[start_idx, end_idx])
-    
+    # debug_plot(derivative, range(len(derivative)), verticalLines=[start_idx, end_idx])
+
     # Perform detailed boundary detection within the region of interest
     vertical_boundaries = find_vertical_boundaries(differences, start_idx, end_idx)
-    
+
     # Convert boundary positions back to original image coordinates
     # by accounting for the initial horizontal crop
     return int(CropAmount * width) + np.array(vertical_boundaries)
@@ -644,6 +663,8 @@ def analyze_vertical_differences(image_path, top_index, bottom_index, enable_plo
         The function includes numerical safeguards to prevent floating-point errors
         when the angle approaches 0° or 180°.
     """
+
+
 # Compute contact angle between meniscus and wall
 def compute_contact_angle(p1, cx, cy):
     # Radius vector from circle center to the contact point p1
@@ -691,6 +712,8 @@ def compute_contact_angle(p1, cx, cy):
         The function generates 200 points along the arc for smooth visualization
         or precise analysis.
     """
+
+
 # Generate a series of points along a circular arc between two specified points
 def generate_arc_points(cx, cy, r, p1, p2):
     """Generate points along arc from p1 to p2."""
@@ -728,6 +751,8 @@ def generate_arc_points(cx, cy, r, p1, p2):
     Returns:
         None: This function displays a plot but doesn't return a value
     """
+
+
 # Visualization Functions
 def plot_meniscus_with_annotations(
     photo,
@@ -741,25 +766,27 @@ def plot_meniscus_with_annotations(
     # Skip visualization if plotting is disabled
     if not enable_plot:
         return
-        
+
     # Unpack parameters for easier access
     p1, p2, p3 = points  # Contact points and midpoint
     cx, cy, r = circle_params  # Circle center coordinates and radius
     top_index, bottom_index = boundaries  # Horizontal channel boundaries
-    vertical_indices, left_index, right_index = vertical_boundaries  # Vertical boundaries
+    vertical_indices, left_index, right_index = (
+        vertical_boundaries  # Vertical boundaries
+    )
     contact_angle = angle_data[0]  # Extract scalar contact angle
-    
+
     # Generate smooth arc representing the meniscus curve between contact points
     xs, ys = generate_arc_points(cx, cy, r, p1, p2)
-    
+
     # Create visualization figure
     plt.figure(figsize=(12, 6))
     plt.imshow(photo)  # Display original image as background
-    
+
     # Draw vertical green lines at the meniscus contact points with channel walls
     for idx in vertical_indices:
         plt.axvline(x=idx + 1, color="green", linestyle="-", linewidth=2)
-    
+
     # Draw horizontal red lines representing the channel walls
     plt.hlines(
         [top_index, bottom_index],
@@ -769,14 +796,13 @@ def plot_meniscus_with_annotations(
         linewidth=2,
     )
 
-
     # Elias code: draw the contact line and small angle arc
-    t = contact_angle -90  # degrees
+    t = contact_angle - 90  # degrees
     # Direction of the tangent line
     secondLineDirection = np.array([np.cos(np.deg2rad(t)), np.sin(np.deg2rad(t))])
     l = 100  # line length
     p4 = p1 + secondLineDirection * l
-    plt.plot([p1[0], p4[0]], [p1[1], p4[1]], c='black')
+    plt.plot([p1[0], p4[0]], [p1[1], p4[1]], c="black")
 
     # --- Draw a small arc indicating the contact angle (< 90°) ---
     angle_r = 40.0  # radius of the mini‑arc in pixels
@@ -798,16 +824,13 @@ def plot_meniscus_with_annotations(
     angle_ys = p1[1] + angle_r * np.sin(theta)
     plt.plot(angle_xs, angle_ys, c="black", linewidth=2)
 
-
-    
-
     # Draw blue curve representing the fitted meniscus profile
     plt.plot(xs, ys, "-", color="blue", linewidth=3)
-    
+
     # Convert pixel radius to physical units (micrometers)
     # Assumes 100 μm standard channel height for scaling
     r_microns = r * (100 / abs(bottom_index - top_index))
-    
+
     # Add radius annotation in the upper left corner
     plt.text(
         photo.shape[1] * 0.05,
@@ -817,7 +840,7 @@ def plot_meniscus_with_annotations(
         fontsize=12,
         bbox=dict(facecolor="white", alpha=0.7),  # White background for readability
     )
-    
+
     # Add left contact angle annotation
     # plt.text(
     #     p1[0] + 10,
@@ -827,20 +850,20 @@ def plot_meniscus_with_annotations(
     #     fontsize=12,
     #     bbox=dict(facecolor="white", alpha=0.7),
     # )
-    
+
     # Add right contact angle annotation
-    #plt.text(
-        #p2[0] + 10,
-        #bottom_index + 20,
-        #r"$\beta = {}^\circ$".format(f"{beta:.1f}"),
-        #color="purple",
-        #fontsize=12,
-        #bbox=dict(facecolor="white", theta=0.7),
-    #)
-    
+    # plt.text(
+    # p2[0] + 10,
+    # bottom_index + 20,
+    # r"$\beta = {}^\circ$".format(f"{beta:.1f}"),
+    # color="purple",
+    # fontsize=12,
+    # bbox=dict(facecolor="white", theta=0.7),
+    # )
+
     # Draw a dashed line showing one radius of the circle
     plt.plot([cx, p1[0]], [cy, p1[1]], linestyle="--", color="blue", linewidth=2)
-    
+
     # Remove axes for cleaner presentation
     plt.axis("off")
     plt.tight_layout()
@@ -864,31 +887,33 @@ def plot_meniscus_with_annotations(
     Returns:
         None: This function displays a plot but doesn't return a value
     """
-#Plot a triangle diagram showing the key geometric points in the meniscus
+
+
+# Plot a triangle diagram showing the key geometric points in the meniscus
 def plot_triangle_diagram(photo, points, circle_center, enable_plot=True):
     """Plot triangle diagram showing key geometric points."""
     # Skip visualization if plotting is disabled
     if not enable_plot:
         return
-        
+
     # Unpack input points for clarity
     p1, p2, p3 = points  # Contact points and reference point
     cx, cy = circle_center  # Center of the circle of curvature
-    
+
     # Create a new figure with appropriate size
     plt.figure(figsize=(12, 6))
     plt.imshow(photo)  # Use the original image as background
-    
+
     # Plot the key points in the geometric construction
     plt.plot(p1[0], p1[1], "o", color="black")  # Point A (left top contact point)
     plt.plot(p1[0], p3[1], "o", color="black")  # Point B (vertical projection below A)
-    plt.plot(cx, cy, "o", color="black")        # Point O (circle center)
-    
+    plt.plot(cx, cy, "o", color="black")  # Point O (circle center)
+
     # Add labels to the points for clarity
     plt.text(p1[0] + 5, p1[1] - 10, "A", color="black", fontsize=12, weight="bold")
     plt.text(p1[0] + 5, p3[1] - 10, "B", color="black", fontsize=12, weight="bold")
     plt.text(cx + 5, cy - 10, "O", color="black", fontsize=12, weight="bold")
-    
+
     # Draw the triangle connecting the points
     # The sequence creates a complete path: A -> B -> O -> A
     plt.plot(
@@ -898,15 +923,14 @@ def plot_triangle_diagram(photo, points, circle_center, enable_plot=True):
         color="black",
         linewidth=2,
     )
-    
+
     # Add a title to explain the diagram
     plt.title("Annotated Photo with Points A, B, O and Triangle")
-    
+
     # Remove axis ticks for cleaner presentation
     plt.axis("off")
     plt.tight_layout()
     plt.show()
-
 
     """
     Fit a circle to a set of points using least squares.
@@ -917,6 +941,8 @@ def plot_triangle_diagram(photo, points, circle_center, enable_plot=True):
     Returns:
         (cx, cy, r): Circle center (cx, cy) and radius r
     """
+
+
 def fit_circle(points):
     points = np.asarray(points)
     x = points[:, 0]
@@ -932,7 +958,6 @@ def fit_circle(points):
     r = np.sqrt(params[2] + cx**2 + cy**2)
 
     return cx, cy, r
-
 
     """
     Perform complete meniscus analysis on an image of a fluid channel.
@@ -959,42 +984,48 @@ def fit_circle(points):
               - top_index, bottom_index: Horizontal channel boundaries
               - left_index, right_index: Vertical meniscus contact points
     """
+
+
 # Main analysis function to analyse meniscus on an image
 def analyze_meniscus(image_path, enable_plot=True):
-    
     # Step 1: Find the horizontal boundaries of the channel
     # This identifies the top and bottom walls of the channel
     top_index, bottom_index = find_horizontal_boundaries(image_path, False)
-    
+
     # Step 2: Find the vertical boundaries and meniscus contact points
     # This identifies where the meniscus contacts the channel walls
     vertical_boundaries = analyze_vertical_differences(
         image_path, top_index, bottom_index, enable_plot
     )
-    
+
     # Step 3: Compute key geometric points for the analysis
-    left_index = min(vertical_boundaries)   # Left contact point column
+    left_index = min(vertical_boundaries)  # Left contact point column
     right_index = max(vertical_boundaries)  # Right contact point column
-    
+
     # Define three points that define the meniscus curve:
     p1 = [left_index, top_index]  # Left top contact point
-    p2 = [left_index, bottom_index]  # Left bottom reference (not used in circle calculation)
-    middle_of_channel = top_index + (bottom_index - top_index) // 2  # Middle row of channel
+    p2 = [
+        left_index,
+        bottom_index,
+    ]  # Left bottom reference (not used in circle calculation)
+    middle_of_channel = (
+        top_index + (bottom_index - top_index) // 2
+    )  # Middle row of channel
     p3 = [right_index, middle_of_channel]  # Right middle point on meniscus
-    
+
     # Step 4: Compute the parameters of the circle that best fits the meniscus
     cx, cy, r = fit_circle([p1, p2, p3])  # Center x, center y, radius
-    
+
     # Step 5: Calculate the contact angle between meniscus and wall
     contact_angle = compute_contact_angle(p1, cx, cy)  # Angle in degrees
-    #beta = 180 - contact_angle  # Supplementary angle
-    
+    # beta = 180 - contact_angle  # Supplementary angle
+
     # Print the primary result
     print(f"Contact angle at wall: {contact_angle:.1f}°")
-    
+
     # Step 6: Load the original image for visualization
     photo = mpimg.imread(image_path)
-    
+
     # Step 7: Generate visualizations of the results
     # Plot the meniscus with all annotations
     plot_meniscus_with_annotations(
@@ -1006,14 +1037,14 @@ def analyze_meniscus(image_path, enable_plot=True):
         angle_data=[contact_angle],
         enable_plot=enable_plot,
     )
-    
+
     # Plot the geometric construction diagram
-    #plot_triangle_diagram(photo, [p1, p2, p3], [cx, cy], enable_plot)
-    
+    # plot_triangle_diagram(photo, [p1, p2, p3], [cx, cy], enable_plot)
+
     # Step 8: Return all results as a dictionary for further processing
     return {
         "contact_angle": contact_angle,
-        #"beta": beta,
+        # "beta": beta,
         "radius": r,
         "top_index": top_index,
         "bottom_index": bottom_index,
@@ -1024,6 +1055,6 @@ def analyze_meniscus(image_path, enable_plot=True):
 
 # Execute analysis if run directly
 if __name__ == "__main__":
-    #image_path = "/Users/maye/Desktop/PhD/Wiktor stage/angle photos/Figures/before_plasma.png"
-    image_path = "/Users/maye/Desktop/PhD/Stage Wiktor/angle photos/Figures/after_plasma.png"
+    # image_path = "Figures/before_plasma.png"
+    image_path = "Figures/after_plasma.png"
     results = analyze_meniscus(image_path, enable_plot=True)
