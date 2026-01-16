@@ -126,9 +126,12 @@ def find_tangents(image_path, show=True, debug=False):
     bottom_point = find_contact_point(gray, bottom)
     top_tangent, top_point = find_tangent(gray, top_point, debug=debug)
     bottom_tangent, bottom_point = find_tangent(gray, bottom_point, debug=debug)
+    tt = 180+np.rad2deg(top_tangent)
+    bt = 180-np.rad2deg(bottom_tangent)
     print(image_path)
-    print(f"Top tangent: {180+np.rad2deg(top_tangent):.0f}")
-    print(f"Bottom tangent: {180-np.rad2deg(bottom_tangent):.0f}")
+    print(f"Top tangent: {tt:.0f}")
+    print(f"Bottom tangent: {bt:.0f}")
+    print(f"Average: {((tt+bt)/2):.0f}")
 
     if show:
         ax = show_image_with_marks(
@@ -147,8 +150,9 @@ def find_tangents(image_path, show=True, debug=False):
 
 if __name__ == "__main__":
     import os
+    find_tangents("Figures/2.png", debug=True)
 
-    folder = "Figures/article_figures"
+    folder = "Figures"
     for filename in sorted(os.listdir(folder)):
         if not filename.lower().endswith((".png", ".jpg", ".jpeg", ".tif", ".tiff")):
             continue

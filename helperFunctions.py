@@ -17,7 +17,7 @@ def load_image_from_disk(image_path: str) -> np.ndarray:
     return np.array(image)
 
 
-def load_image(image_path, gray=False, autoCrop=True, debug=False) -> np.ndarray:
+def load_image(image_path, gray=False, blurrAlpha=True, autoCrop=True, debug=False) -> np.ndarray:
     image = load_image_from_disk(image_path)
     if autoCrop:
         image = auto_crop(image, debug=debug)
@@ -39,7 +39,7 @@ def grayscale_image(image: np.ndarray) -> np.ndarray:
     if image.shape[2] >= 4:
         alpha = image[:, :, 3].astype(np.float32)
         gray = gray.astype(np.float32)
-        gray[alpha == 0] = np.nan
+        gray[alpha < 254] = np.nan
 
     return gray
 
@@ -86,7 +86,7 @@ def compute_mean_differences(gray, axis):
     return diffs.astype(np.float32).tolist()
 
 
-def find_local_maxima(arr, n=-1, min_dist=0):
+def find_local_maxima(arr, n=-1, min_dist=0, edge_buffer=0):
     """Return the n largest local maxima of a 1D array.
 
     Returns (heights, indices) where:
@@ -109,6 +109,12 @@ def find_local_maxima(arr, n=-1, min_dist=0):
     if a.size < 3:
         return np.array([], dtype=a.dtype), np.array([], dtype=int)
 
+    if edge_buffer>0:    
+        if a.size>2*edge_buffer:
+            a = a[edge_buffer:-edge_buffer]
+        else:
+            raise ValueError("Edge buffer is too large!")
+
     # Handle NaNs/infs gracefully by excluding them from peak detection.
     # We map non-finite values to -inf so they cannot become peaks.
     if not np.all(np.isfinite(a)):
@@ -127,14 +133,14 @@ def find_local_maxima(arr, n=-1, min_dist=0):
     peaks, _props = find_peaks(a, plateau_size=True, distance=distance)
     if peaks.size == 0:
         print("Warning! No peaks found!")
-        debug_plot(arr)
+        debug_plot(a)
         return np.array([], dtype=a.dtype), np.array([], dtype=int)
 
     heights = a[peaks]
 
     if n is None or n == -1:
         # Keep original order
-        return heights, peaks.astype(int)
+        return heights, edge_buffer+peaks.astype(int)
 
     if n <= 0:
         return np.array([], dtype=a.dtype), np.array([], dtype=int)
@@ -142,7 +148,7 @@ def find_local_maxima(arr, n=-1, min_dist=0):
     if peaks.size <= n:
         print("Warning! Fewer than expected maxima")
         debug_plot(arr)
-        return heights, peaks.astype(int)
+        return heights, edge_buffer+peaks.astype(int)
 
     # Select top-n by height (ties: earlier index wins deterministically)
     # Use lexsort to avoid ambiguity: primary key -height, secondary key index
@@ -159,7 +165,7 @@ def find_local_maxima(arr, n=-1, min_dist=0):
     sel_peaks = sel_peaks[in_order]
     sel_heights = sel_heights[in_order]
 
-    return sel_heights, sel_peaks.astype(int)
+    return sel_heights, edge_buffer+sel_peaks.astype(int)
 
 
 # --- New helper functions: gaussian_blur_ignore_nan and sample_bilinear_cv2 ---
@@ -338,8 +344,8 @@ def find_channel_edges(gray, show=False, debug=False):
     # but for bad images the two maxima can drift far apart. In that case,
     # fall back to using a single maximum ("second method").
 
-    top_val, top_candidates = find_local_maxima(differences[:mid], 2)
-    bottom_val, bottom_candidates = find_local_maxima(differences[mid:], 2)
+    top_val, top_candidates = find_local_maxima(differences[:mid], 2, edge_buffer=2)
+    bottom_val, bottom_candidates = find_local_maxima(differences[mid:], 2, edge_buffer=2)
 
     top_candidates = np.asarray(top_candidates, dtype=int)
     bottom_candidates = np.asarray(bottom_candidates, dtype=int)
@@ -385,7 +391,7 @@ def find_channel_edges(gray, show=False, debug=False):
     bottom_idx = pick_edge(bottom_candidates, bottom_val, offset=mid, max_sep=10)
 
     if debug:
-        debug_plot(differences, i_markers=[top_idx, bottom_idx])
+        debug_plot(differences, i_markers=[top_idx, bottom_idx], title="Find channel edges: Diffs of rows")
 
     # Show the result
     if show:
@@ -399,13 +405,13 @@ def find_channel_edges(gray, show=False, debug=False):
     return top_idx, bottom_idx
 
 
-def auto_crop(image, extra=40, debug=False):
+def auto_crop(image, extra=60, debug=False):
     gray = grayscale_image(image)
     top_idx, bottom_idx = find_channel_edges(gray, debug=debug)
 
     differences = compute_mean_differences(gray, "cols")
-    val, index = find_local_maxima(differences, 1)
-    middle_idx = int(np.mean(index)) + 1 
+    val, index = find_local_maxima(differences, 1, edge_buffer=20)
+    middle_idx = int(np.mean(index))
 
     # Show the result
     if debug:
@@ -429,22 +435,12 @@ def auto_crop(image, extra=40, debug=False):
 
     middle_idx = int(np.clip(middle_idx, 0, W - 1))
 
-    # Target crop size: a square whose side is the detected height plus margin.
-    # Clamp to both image dimensions.
-    side = int(abs(bottom_idx - top_idx) + int(extra))
-    side = int(np.clip(side, 1, min(H, W)))
-
-    # Crop center (y, x).
-    cy = 0.5 * (top_idx + bottom_idx)
-    cx = float(middle_idx)
-
-    half = side / 2.0
-
+    h = bottom_idx-top_idx
     # Proposed bounds.
     y0 = top_idx-extra
     y1 = bottom_idx+extra
-    x0 = int(np.floor(cx - half))
-    x1 = x0 + side
+    x0 = middle_idx-h-extra
+    x1 = middle_idx+h+extra
 
     # Shift the window back inside the image if it goes out of bounds.
     if y0 < 0:
