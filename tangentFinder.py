@@ -119,7 +119,7 @@ def find_tangent(gray, point, search_radius=12, debug=False):
     w, t  = find_tangent_and_width(gray, new_point, search_radius, debug=debug)
     return t, new_point
 
-def find_tangents(image_path, show=True, debug=False):
+def find_tangents(image_path, show=True, debug=False, save=True):
     gray = load_image(image_path, gray=True, debug=debug)
     top, bottom = find_channel_edges(gray, show=debug, debug=debug)
     top_point = find_contact_point(gray, top)
@@ -128,37 +128,47 @@ def find_tangents(image_path, show=True, debug=False):
     bottom_tangent, bottom_point = find_tangent(gray, bottom_point, debug=debug)
     tt = 180+np.rad2deg(top_tangent)
     bt = 180-np.rad2deg(bottom_tangent)
+    avg=round((tt+bt)/2)
     print(image_path)
     print(f"Top tangent: {tt:.0f}")
     print(f"Bottom tangent: {bt:.0f}")
-    print(f"Average: {((tt+bt)/2):.0f}")
+    print(f"Average: {avg}")
 
+    ax = show_image_with_marks(
+        gray,
+        contact_points=[top_point, bottom_point],
+        horizontal_lines=[int(top), int(bottom)],
+        #title="Contact Points on Channel Edges",
+        enable_plot=True,
+        mark_radius=12,
+        show=False
+    )
+    add_radial_line(ax, top_point, top_tangent, 40)
+    add_radial_line(ax, bottom_point, bottom_tangent, 40)
     if show:
-        ax = show_image_with_marks(
-            gray,
-            contact_points=[top_point, bottom_point],
-            horizontal_lines=[int(top), int(bottom)],
-            title="Contact Points on Channel Edges",
-            enable_plot=True,
-            mark_radius=12,
-            show=False
-        )
-        add_radial_line(ax, top_point, top_tangent, 30)
-        add_radial_line(ax, bottom_point, bottom_tangent, 30)
         plt.show()
+    if save:
+        from pathlib import Path
+        p = Path(image_path)
+        o=Path("Figures/Analyzed")
+        o.mkdir(exist_ok=True)
+        newp = o/(p.stem+f"_{avg}"+p.suffix)
+        ax.figure.savefig(newp)
+    
 
 
 if __name__ == "__main__":
     import os
-    find_tangents("Figures/2.png", debug=True)
+    find_tangents("Figures/test_angle_46.png", debug=True)
 
+    folder = "Figures/article_figures"
     folder = "Figures"
     for filename in sorted(os.listdir(folder)):
         if not filename.lower().endswith((".png", ".jpg", ".jpeg", ".tif", ".tiff")):
             continue
         image_path = os.path.join(folder, filename)
         try:
-            find_tangents(image_path)
+            find_tangents(image_path, show=False)
         except ValueError as e:
             print(e)
             print(f"Analysis failed for {image_path}")

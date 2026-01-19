@@ -500,7 +500,7 @@ def add_radial_line(ax, p, theta, length, **kwargs):
 
     # Provide a sensible default if the caller didn't specify a style.
     if "linewidth" not in kwargs and "lw" not in kwargs:
-        kwargs["linewidth"] = 1.5
+        kwargs["linewidth"] = 4
 
     (line,) = ax.plot([x, x1], [y, y1], **kwargs)
     return line
@@ -577,7 +577,7 @@ def show_image_with_marks(
         ax,
         horizontal_lines=horizontal_lines,
         vertical_lines=vertical_lines,
-        horizontal_style={"color": "red", "linestyle": "--", "linewidth": 1},
+        horizontal_style={"color": "red", "linestyle": "--", "linewidth": 3},
         vertical_style={"color": "red", "linestyle": "-", "linewidth": 2},
     )
 
